@@ -1,0 +1,10 @@
+streamlit>=1.30
+pandas>=2.0
+plotly>=5.18
+fpdf2>=2.7
+fastapi>=0.110
+uvicorn>=0.27
+pytesseract>=0.3
+Pillow>=10.0
+arabic-reshaper>=3.0
+python-bidi>=0.4

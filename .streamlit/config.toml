@@ -1,0 +1,9 @@
+# .streamlit/config.toml
+[server]
+port = 8503
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"

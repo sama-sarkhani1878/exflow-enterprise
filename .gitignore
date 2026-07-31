@@ -1,0 +1,28 @@
+# ExFlow Enterprise — .gitignore
+# Don't commit sensitive data and environment files
+
+# Database (contains real user data & passwords)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+.env
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Reports
+reports/
+
+# OS
+.DS_Store
+
+# Secrets
+*.pem
+*.key
