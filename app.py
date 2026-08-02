@@ -4,7 +4,7 @@
 Streamlit + SQLite + AI Features + 3 Languages
 """
 import streamlit as st
-import sqlite3, hashlib, secrets, os, json, calendar, base64
+import sqlite3, hashlib, secrets, os, json, calendar, base64, subprocess, sys
 from datetime import datetime, date
 import pandas as pd
 import plotly.express as px
@@ -61,97 +61,8 @@ pwa_html = f"""
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
-# ─── DB Setup ───
-DB_DIR = os.path.join(os.path.dirname(__file__), "data")
-os.makedirs(DB_DIR, exist_ok=True)
-DB_PATH = os.path.join(DB_DIR, "exflow.db")
-
-def get_db():
-    c = sqlite3.connect(DB_PATH, timeout=30)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA busy_timeout=30000")
-    c.execute("PRAGMA foreign_keys=ON")
-    return c
-
-def init_db():
-    # Default admin password — change via env var or after first login!
-    admin_pw = os.environ.get("EXFLOW_ADMIN_PW", "admin123")
-    admin_hash = hashlib.sha256(admin_pw.encode()).hexdigest()
-    c = get_db()
-    c.execute("""CREATE TABLE IF NOT EXISTS companies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
-        slug TEXT NOT NULL UNIQUE, currency TEXT DEFAULT 'EUR',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL, role TEXT DEFAULT 'user',
-        company_id INTEGER REFERENCES companies(id), display_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS sessions (
-        token TEXT PRIMARY KEY, user_id INTEGER REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_id INTEGER REFERENCES companies(id),
-        amount REAL NOT NULL, category TEXT NOT NULL,
-        description TEXT DEFAULT '', date TEXT NOT NULL,
-        created_by INTEGER REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_id INTEGER REFERENCES companies(id),
-        name TEXT NOT NULL, icon TEXT DEFAULT '📌',
-        color TEXT DEFAULT '#6b7280', UNIQUE(company_id, name))""")
-    c.execute("""CREATE TABLE IF NOT EXISTS budget (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_id INTEGER REFERENCES companies(id),
-        month TEXT NOT NULL, category TEXT NOT NULL,
-        amount REAL NOT NULL, UNIQUE(company_id, month, category))""")
-    c.execute("""CREATE TABLE IF NOT EXISTS income (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_id INTEGER REFERENCES companies(id),
-        amount REAL NOT NULL, source TEXT NOT NULL,
-        month TEXT NOT NULL, date TEXT NOT NULL,
-        created_by INTEGER REFERENCES users(id))""")
-    c.execute("""CREATE TABLE IF NOT EXISTS api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        company_id INTEGER REFERENCES companies(id),
-        key TEXT NOT NULL UNIQUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-    
-    c.execute("PRAGMA journal_mode=WAL")
-    c.commit()
-
-    c.execute("INSERT OR IGNORE INTO companies(id,name,slug,currency,created_at) VALUES(1,'Demo Company','demo','EUR',datetime('now'))")
-    c.execute("INSERT OR IGNORE INTO users(id,username,password_hash,raw_password,role,company_id,display_name,created_at) VALUES(1,'admin',?,?,'admin',1,'Admin',datetime('now'))", (admin_hash, admin_pw))
-
-    existing = c.execute("SELECT COUNT(*) FROM categories WHERE company_id=1").fetchone()[0]
-    if existing == 0:
-        defaults = [
-            (1,'Food','🍔','#f97316'),(1,'Housing','🏠','#8b5cf6'),
-            (1,'Transport','🚗','#3b82f6'),(1,'Entertainment','🎮','#ec4899'),
-            (1,'Health','💊','#10b981'),(1,'Shopping','🛍️','#f59e0b'),
-            (1,'Bills','📄','#ef4444'),(1,'Education','📚','#6366f1'),
-            (1,'Other','📌','#6b7280'),
-        ]
-        c.executemany("INSERT INTO categories(company_id,name,icon,color) VALUES(?,?,?,?)", defaults)
-        samples = [
-            (1,15.0,'Health','Pharmacy','2026-07-10',1),
-            (1,22.0,'Transport','Gas','2026-07-12',1),
-            (1,95.0,'Food','Weekly shopping','2026-07-13',1),
-            (1,65.0,'Bills','Electric bill','2026-07-15',1),
-            (1,35.0,'Entertainment','Cinema','2026-07-19',1),
-            (1,49.0,'Transport','Monthly ticket','2026-07-01',1),
-        ]
-        c.executemany("INSERT INTO expenses(company_id,amount,category,description,date,created_by) VALUES(?,?,?,?,?,?)", samples)
-        c.execute("INSERT INTO income(company_id,amount,source,month,date) VALUES(1,1500,'Monthly Revenue','2026-07','2026-07-01')")
-        # Budget samples
-        budgets = [('2026-07','Food',400),('2026-07','Housing',600),('2026-07','Transport',200),
-                   ('2026-07','Entertainment',150),('2026-07','Bills',120),('2026-07','Health',80)]
-        c.executemany("INSERT OR IGNORE INTO budget(company_id,month,category,amount) VALUES(1,?,?,?)", budgets)
-    c.commit()
-    c.close()
+# ─── DB & Auth helpers (shared module — also used by api.py & tests) ───
+from db import get_db, init_db, login as _db_login, logout as _db_logout, get_user_by_token, log_activity, DB_PATH
 
 init_db()
 
@@ -211,6 +122,26 @@ T = {
     "old_pass": {"fa": "رمز فعلی", "de": "Aktuelles Passwort", "en": "Current password"},
     "pass_changed": {"fa": "رمز عبور با موفقیت تغییر کرد", "de": "Passwort erfolgreich geändert", "en": "Password changed successfully"},
     "wrong_pass": {"fa": "رمز فعلی اشتباه است", "de": "Falsches Passwort", "en": "Wrong current password"},
+    "import_file": {"fa": "ورود فایل (Excel/CSV)", "de": "Datei importieren (Excel/CSV)", "en": "Import file (Excel/CSV)"},
+    "source_ph": {"fa": "مثلاً: فروش، قرارداد، مشاوره...", "de": "z.B. Verkauf, Vertrag, Beratung...", "en": "e.g. Sales, Contract, Consulting..."},
+    "import_hint": {"fa": "فایل CSV یا Excel رو آپلود کن (ستون‌ها: amount, category, date, description)", "de": "CSV- oder Excel-Datei hochladen (Spalten: amount, category, date, description)", "en": "Upload CSV or Excel file (columns: amount, category, date, description)"},
+    "import_run": {"fa": "شروع ورود", "de": "Import starten", "en": "Start import"},
+    "imported": {"fa": "ثبت شد", "de": "importiert", "en": "imported"},
+    "skipped": {"fa": "رد شد (خطا)", "de": "übersprungen", "en": "skipped"},
+    "edit": {"fa": "ویرایش", "de": "Bearbeiten", "en": "Edit"},
+    "description": {"fa": "توضیح", "de": "Beschreibung", "en": "Description"},
+    "adv_report": {"fa": "گزارش پیشرفته (مقایسه ماه‌ها + خروجی Excel)", "de": "Erweiterter Bericht (Monatsvergleich + Excel)", "en": "Advanced report (monthly comparison + Excel)"},
+    "cmp_months": {"fa": "مقایسه ۶ ماه اخیر", "de": "Vergleich letzte 6 Monate", "en": "Last 6 months comparison"},
+    "trend6": {"fa": "روند هزینه/درآمد", "de": "Trend Ausgaben/Einnahmen", "en": "Expense/Income trend"},
+    "export": {"fa": "خروجی Excel", "de": "Excel-Export", "en": "Excel export"},
+    "budget_over": {"fa": "بودجه این دسته تمام شد", "de": "Budget für diese Kategorie aufgebraucht", "en": "Budget used up for this category"},
+    "budget_soon": {"fa": "نزدیک به پایان بودجه", "de": "Budget fast aufgebraucht", "en": "Budget nearly used up"},
+    "activity_log": {"fa": "گزارش فعالیت", "de": "Aktivitätsprotokoll", "en": "Activity log"},
+    "brand_color": {"fa": "رنگ برند شرکت", "de": "Markenfarbe", "en": "Brand color"},
+    "save_color": {"fa": "ذخیره رنگ", "de": "Farbe speichern", "en": "Save color"},
+    "backup": {"fa": "پشتیبان‌گیری", "de": "Backup", "en": "Backup"},
+    "backup_hint": {"fa": "یک نسخه پشتیبان از دیتابیس در پوشه backups گرفته می‌شود.", "de": "Eine Datenbank-Sicherung wird im backups-Ordner erstellt.", "en": "A database backup is created in the backups folder."},
+    "do_backup": {"fa": "ایجاد نسخه پشتیبان", "de": "Backup erstellen", "en": "Create backup"},
 }
 
 def tt(key, lang="fa"):
@@ -242,41 +173,13 @@ if ql in ["fa", "de", "en"]:
 
 # ─── Auth ───
 def get_current_user_from_session():
-    token = st.session_state.get("_token") or ""
-    if not token:
-        return None
-    c = get_db()
-    row = c.execute("""
-        SELECT u.id, u.username, u.role, u.company_id, u.display_name,
-               c.name as company_name, c.currency
-        FROM sessions s JOIN users u ON s.user_id=u.id
-        JOIN companies c ON u.company_id=c.id
-        WHERE s.token=?
-    """, (token,)).fetchone()
-    c.close()
-    return dict(row) if row else None
+    return get_user_by_token(st.session_state.get("_token") or "")
 
 def login(username, password):
-    h = hashlib.sha256(password.encode()).hexdigest()
-    c = get_db()
-    user = c.execute("SELECT id FROM users WHERE username=? AND password_hash=?", (username, h)).fetchone()
-    if not user:
-        c.close()
-        return None
-    token = secrets.token_hex(32)
-    c.execute("DELETE FROM sessions WHERE user_id=?", (user["id"],))
-    c.execute("INSERT INTO sessions(token,user_id) VALUES(?,?)", (token, user["id"]))
-    c.commit()
-    c.close()
-    return token
+    return _db_login(username, password)
 
 def logout():
-    token = st.session_state.get("_token", "")
-    if token:
-        c = get_db()
-        c.execute("DELETE FROM sessions WHERE token=?", (token,))
-        c.commit()
-        c.close()
+    _db_logout(st.session_state.get("_token", ""))
     st.session_state["_token"] = ""
     st.session_state.pop("user", None)
 
@@ -504,7 +407,7 @@ st.markdown(f"""
 
 if page.startswith("📊"):
     # ─── DASHBOARD ───
-    st.markdown(f"# 📊 {user['company_name']}")
+    st.markdown(f"# 📊 <span style='color:{user.get('brand_color','#4e8cff')}'>{user['company_name']}</span>", unsafe_allow_html=True)
     sel_month = st.selectbox(tt("month", L), [cur_month], index=0, key="ms")
     if sel_month != st.session_state.get("sel_month"):
         st.session_state["sel_month"] = sel_month
@@ -552,6 +455,59 @@ if page.startswith("📊"):
             except Exception as e:
                 st.error(f"Report Error: {e}")
 
+    # ─── Advanced Reports (monthly comparison + Excel export) ───
+    with st.expander(f"📈 {tt('adv_report', L)}"):
+        # Load all months for this company
+        c_adv = get_db()
+        all_exp = c_adv.execute("SELECT date, amount, category FROM expenses WHERE company_id=? AND date LIKE ?", (CID, selected_month[:7]+"%")).fetchall()
+        c_adv.close()
+        exp_df = pd.DataFrame([{"date": r["date"], "amount": r["amount"], "category": r["category"]} for r in all_exp]) if all_exp else pd.DataFrame(columns=["date","amount","category"])
+        
+        if exp_df.empty:
+            st.info("📭 " + tt("no_data", L))
+        else:
+            # Monthly comparison across last 6 months
+            cmp_months = []
+            for m_offset in range(5, -1, -1):
+                ym = datetime.strptime(selected_month[:7], "%Y-%m").replace(day=1)
+                from dateutil.relativedelta import relativedelta
+                m_target = (ym - relativedelta(months=m_offset)).strftime("%Y-%m")
+                c2 = get_db()
+                e_sum = c2.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ?", (CID, m_target+"%")).fetchone()[0]
+                i_sum = c2.execute("SELECT COALESCE(SUM(amount),0) FROM income WHERE company_id=? AND date LIKE ?", (CID, m_target+"%")).fetchone()[0]
+                c2.close()
+                cmp_months.append({"month": m_target, "expenses": e_sum, "income": i_sum})
+            cmp_df = pd.DataFrame(cmp_months)
+            
+            ccol1, ccol2 = st.columns(2)
+            with ccol1:
+                st.markdown(f"### {tt('cmp_months', L)}")
+                st.dataframe(cmp_df.style.format({"expenses": "{:,.0f}", "income": "{:,.0f}"}), width="stretch", hide_index=True)
+            with ccol2:
+                fig_m = go.Figure()
+                fig_m.add_bar(x=cmp_df["month"], y=cmp_df["expenses"], name=tt("expenses",L), marker_color="#f87171")
+                fig_m.add_bar(x=cmp_df["month"], y=cmp_df["income"], name=tt("income",L), marker_color="#4ade80")
+                fig_m.update_layout(title=tt("trend6", L), barmode="group", height=300)
+                st.plotly_chart(fig_m, width="stretch")
+            
+            # Excel export
+            st.markdown("---")
+            st.markdown(f"### 🧾 {tt('export', L)}")
+            export_df = pd.DataFrame([{"date": r["date"], "category": r["category"], "amount": r["amount"], "type": tt("expenses",L)} for r in all_exp])
+            export_df = export_df[["date","category","amount","type"]]
+            if selected_month[:7]:
+                inc_df = pd.DataFrame([{"date": r["date"], "category": r["source"], "amount": r["amount"], "type": tt("income",L)}
+                                       for r in c_adv2_inc]) if (c_adv2_inc := get_db().execute("SELECT date, source, amount FROM income WHERE company_id=? AND date LIKE ?", (CID, selected_month[:7]+"%")).fetchall()) else pd.DataFrame(columns=["date","category","amount","type"])
+            if 'inc_df' in locals() and not inc_df.empty:
+                export_df = pd.concat([export_df, inc_df], ignore_index=True)
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine="openpyxl") as xw:
+                export_df.to_excel(xw, sheet_name=tt("transactions", L), index=False)
+            excel_bytes = buffer.getvalue()
+            st.download_button(f"⬇️ {tt('save',L)} .xlsx", excel_bytes,
+                file_name=f"{user['company_name']}_{selected_month}_export.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     if df.empty:
         st.info("📭 " + tt("no_data", L))
     else:
@@ -576,6 +532,28 @@ if page.startswith("📊"):
 elif page.startswith("📋"):
     # ─── TRANSACTIONS ───
     st.markdown(f"# 📋 {tt('transactions',L)}")
+    
+    # ─── File Import (CSV/Excel) ───
+    with st.expander("📂 " + tt("import_file", L)):
+        from importer import import_file
+        import io as _io
+        up_file = st.file_uploader(tt("import_hint", L), type=["csv", "xlsx", "xls"], key="import_up")
+        if up_file:
+            content = up_file.getvalue()
+            st.markdown(f"📄 {up_file.name} — {len(content)/1024:.1f} KB")
+            if st.button(f"🚀 {tt('import_run', L)}", use_container_width=True):
+                with st.spinner("..."):
+                    res = import_file(content, up_file.name, company_id=CID, created_by=user["id"])
+                if res.get("ok"):
+                    st.success(f"✅ {res['inserted']} / {res['total']} " + tt("imported", L))
+                    if res["skipped"]:
+                        st.warning(f"⚠️ {res['skipped']} " + tt("skipped", L))
+                        for e in res["errors"]:
+                            st.caption(f"  • {e}")
+                    st.rerun()
+                else:
+                    st.error(res.get("error", "Import failed"))
+    
     ca, cl = st.columns([1, 1.6])
     with ca:
         st.markdown(f"### ➕ {tt('add_expense',L)}")
@@ -599,7 +577,19 @@ elif page.startswith("📋"):
             if st.form_submit_button(f"✅ {tt('save',L)}", use_container_width=True):
                 c = get_db(); c.execute("INSERT INTO expenses(company_id,amount,category,description,date,created_by) VALUES(?,?,?,?,?,?)",
                     (form_cid, am, sc_db, ds, td.strftime("%Y-%m-%d"), user["id"]))
-                c.commit(); c.close(); st.rerun()
+                c.commit()
+                log_activity(form_cid, user["id"], user["username"], "add_expense", f"{am}€ {sc_db}")
+                # ── Budget warning check ──
+                month_ym = td.strftime("%Y-%m")
+                b_row = c.execute("SELECT amount as budget FROM budget WHERE company_id=? AND month=? AND category=?", (form_cid, month_ym, sc_db)).fetchone()
+                if b_row:
+                    used = c.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ? AND category=?", (form_cid, month_ym+"%", sc_db)).fetchone()[0]
+                    pct = used / b_row["budget"] * 100 if b_row["budget"] else 100
+                    if pct >= 100:
+                        st.warning(f"⚠️ {tt('budget_over', L)}: {used:.0f}€ / {b_row['budget']:.0f}€ ({pct:.0f}%)")
+                    elif pct >= 80:
+                        st.warning(f"🟠 {tt('budget_soon', L)}: {used:.0f}€ / {b_row['budget']:.0f}€ ({pct:.0f}%)")
+                c.close(); st.rerun()
         st.markdown("---")
         st.markdown(f"### 💶 {tt('add_income',L)}")
         with st.form("inf"):
@@ -612,37 +602,104 @@ elif page.startswith("📋"):
                 sel2 = st.selectbox("🏢 شرکت", opts2, key="if_comp")
                 form_cid2 = comps2[opts2.index(sel2)]["id"]
             st.number_input(tt("amount",L), min_value=0.01, step=100.0, key="ia")
-            st.text_input(tt("source",L), value="Revenue", key="src")
+            st.text_input(tt("source",L), placeholder=tt("source_ph", L), key="src")
             st.date_input(tt("date",L), value=today, key="id")
             if st.form_submit_button(f"💾 {tt('save',L)}", use_container_width=True):
                 c = get_db(); c.execute("INSERT INTO income(company_id,amount,source,month,date) VALUES(?,?,?,?,?)",
                     (form_cid2, st.session_state.ia, st.session_state.src,
                      st.session_state.id.strftime("%Y-%m"), st.session_state.id.strftime("%Y-%m-%d")))
-                c.commit(); c.close(); st.rerun()
+                c.commit()
+                log_activity(form_cid2, user["id"], user["username"], "add_income", f"{st.session_state.ia}€ {st.session_state.src}")
+                c.close(); st.rerun()
     with cl:
         st.markdown(f"### 📋 {tt('list',L)}")
         if ex:
             for e in ex:
                 ci = cmap.get(e["category"], {"icon": "📌", "color": "#6b7280"})
-                st.markdown(f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;'><span>{ci['icon']}</span>"
-                    f"<span style='background:{ci['color']}20;color:{ci['color']};padding:2px 8px;border-radius:12px;font-size:0.7rem;'>{ct(e['category'], L)}</span>"
-                    f"<span style='flex:1;'>{e['description'] or '-'}</span>"
-                    f"<span style='font-weight:700;color:#f87171;'>{e['amount']:,.2f}€</span>"
-                    f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
-                if st.button("🗑️", key=f"de{e['id']}"):
-                    c = get_db(); c.execute("DELETE FROM expenses WHERE id=?", (e['id'],)); c.commit(); c.close(); st.rerun()
+                col_e, col_btn = st.columns([5, 1])
+                with col_e:
+                    st.markdown(f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;'><span>{ci['icon']}</span>"
+                        f"<span style='background:{ci['color']}20;color:{ci['color']};padding:2px 8px;border-radius:12px;font-size:0.7rem;'>{ct(e['category'], L)}</span>"
+                        f"<span style='flex:1;'>{e['description'] or '-'}</span>"
+                        f"<span style='font-weight:700;color:#f87171;'>{e['amount']:,.2f}€</span>"
+                        f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
+                with col_btn:
+                    st.markdown("")
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("✏️", key=f"ee{e['id']}", help=tt("edit", L)):
+                            st.session_state[f"edit_exp_{e['id']}"] = True
+                    with b2:
+                        if st.button("🗑️", key=f"de{e['id']}"):
+                            c = get_db(); c.execute("DELETE FROM expenses WHERE id=?", (e['id'],)); c.commit()
+                            log_activity(CID, user["id"], user["username"], "delete_expense", f"id={e['id']} {e['description']}")
+                            c.close(); st.rerun()
+                # Edit form
+                if st.session_state.get(f"edit_exp_{e['id']}"):
+                    e_amt = st.number_input(tt("amount",L), value=float(e['amount']), min_value=0.01, key=f"ea{e['id']}")
+                    e_cat = st.selectbox(tt("category",L), [c['name'] for c in cats],
+                                         index=[c['name'] for c in cats].index(e['category']) if e['category'] in [c['name'] for c in cats] else 0, key=f"ec{e['id']}")
+                    e_desc = st.text_input(tt("description",L), value=e['description'] or "", key=f"ed{e['id']}")
+                    e_date = st.date_input(tt("date",L), value=datetime.strptime(e['date'], "%Y-%m-%d").date() if e['date'] else today, key=f"edt{e['id']}")
+                    e_ok, e_cancel = st.columns(2)
+                    with e_ok:
+                        if st.button(f"💾 {tt('save',L)}", key=f"esave{e['id']}"):
+                            c = get_db(); c.execute("UPDATE expenses SET amount=?, category=?, description=?, date=? WHERE id=?",
+                                (st.session_state[f"ea{e['id']}"], st.session_state[f"ec{e['id']}"],
+                                 st.session_state[f"ed{e['id']}"], st.session_state[f"edt{e['id']}"].strftime("%Y-%m-%d"), e['id']))
+                            c.commit()
+                            _det = "id=%s → %s€ %s" % (e['id'], st.session_state['ea' + str(e['id'])], st.session_state['ec' + str(e['id'])])
+                            log_activity(CID, user["id"], user["username"], "edit_expense", _det)
+                            c.close()
+                            st.session_state[f"edit_exp_{e['id']}"] = False
+                            st.rerun()
+                    with e_cancel:
+                        if st.button("❌", key=f"ecancel{e['id']}"):
+                            st.session_state[f"edit_exp_{e['id']}"] = False
+                            st.rerun()
         else:
             st.info("📭 " + tt("no_data", L))
         st.markdown("---")
         st.markdown(f"### 💰 {tt('income_list',L)}")
         if inc:
             for e in inc:
-                st.markdown(f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;'><span>💰</span>"
-                    f"<span style='color:#4ade80;font-weight:700;'>{e['source']}</span><span style='flex:1;'></span>"
-                    f"<span style='color:#4ade80;font-weight:900;'>+{e['amount']:,.2f}€</span>"
-                    f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
-                if st.button("🗑️", key=f"di{e['id']}"):
-                    c = get_db(); c.execute("DELETE FROM income WHERE id=?", (e['id'],)); c.commit(); c.close(); st.rerun()
+                col_i, col_ibtn = st.columns([5, 1])
+                with col_i:
+                    st.markdown(f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;'><span>💰</span>"
+                        f"<span style='color:#4ade80;font-weight:700;'>{e['source']}</span><span style='flex:1;'></span>"
+                        f"<span style='color:#4ade80;font-weight:900;'>+{e['amount']:,.2f}€</span>"
+                        f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
+                with col_ibtn:
+                    st.markdown("")
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("✏️", key=f"ei{e['id']}", help=tt("edit", L)):
+                            st.session_state[f"edit_inc_{e['id']}"] = True
+                    with b2:
+                        if st.button("🗑️", key=f"di{e['id']}"):
+                            c = get_db(); c.execute("DELETE FROM income WHERE id=?", (e['id'],)); c.commit()
+                            log_activity(CID, user["id"], user["username"], "delete_income", f"id={e['id']} {e['source']}")
+                            c.close(); st.rerun()
+                if st.session_state.get(f"edit_inc_{e['id']}"):
+                    i_amt = st.number_input(tt("amount",L), value=float(e['amount']), min_value=0.01, key=f"ia{e['id']}")
+                    i_src = st.text_input(tt("source",L), value=e['source'], key=f"is{e['id']}")
+                    i_date = st.date_input(tt("date",L), value=datetime.strptime(e['date'], "%Y-%m-%d").date() if e['date'] else today, key=f"idt{e['id']}")
+                    i_ok, i_cancel = st.columns(2)
+                    with i_ok:
+                        if st.button(f"💾 {tt('save',L)}", key=f"isave{e['id']}"):
+                            c = get_db(); c.execute("UPDATE income SET amount=?, source=?, date=? WHERE id=?",
+                                (st.session_state[f"ia{e['id']}"], st.session_state[f"is{e['id']}"],
+                                 st.session_state[f"idt{e['id']}"].strftime("%Y-%m-%d"), e['id']))
+                            c.commit()
+                            log_activity(CID, user["id"], user["username"], "edit_income",
+                                         "id=%s → %s€ %s" % (e['id'], st.session_state['ia' + str(e['id'])], st.session_state['is' + str(e['id'])]))
+                            c.close()
+                            st.session_state[f"edit_inc_{e['id']}"] = False
+                            st.rerun()
+                    with i_cancel:
+                        if st.button("❌", key=f"icancel{e['id']}"):
+                            st.session_state[f"edit_inc_{e['id']}"] = False
+                            st.rerun()
         else:
             st.info("📭 " + tt("no_data", L))
 
@@ -796,6 +853,30 @@ elif page.startswith("⚙️"):
     for c in cats:
         st.markdown(f"{c['icon']} {ct(c['name'], L)} — `{c['color']}`")
     
+    # ─── Activity Log (superadmin + admin) ───
+    if user["role"] in ("superadmin", "admin"):
+        with st.expander(f"📜 {tt('activity_log', L)}"):
+            c_log = get_db()
+            logs = c_log.execute("SELECT username, action, detail, created_at FROM activity_log WHERE company_id=? ORDER BY id DESC LIMIT 50", (CID,)).fetchall()
+            c_log.close()
+            if logs:
+                log_df = pd.DataFrame([{"user": r["username"], "action": r["action"], "detail": r["detail"], "when": r["created_at"]} for r in logs])
+                st.dataframe(log_df, width="stretch", hide_index=True)
+            else:
+                st.info("📭 " + tt("no_data", L))
+    
+    # ─── Backup (superadmin) ───
+    if user["role"] in ("superadmin", "admin"):
+        with st.expander(f"💾 {tt('backup', L)}"):
+            st.caption(tt("backup_hint", L))
+            import subprocess as _sub
+            if st.button(f"🔄 {tt('do_backup', L)}"):
+                r = subprocess.run([sys.executable, "backup.py"], capture_output=True, text=True)
+                if r.returncode == 0:
+                    st.success(r.stdout.strip().splitlines()[-1])
+                else:
+                    st.error(r.stderr or r.stdout or "Backup failed")
+    
     # ─── Change Password (all users) ───
     st.markdown("---")
     st.markdown(f"### 🔑 {tt('change_pass', L)}")
@@ -897,11 +978,17 @@ elif page.startswith("🏗️"):
         st.error(f"🚫 {tt('only_superadmin', L)}")
     else:
         c = get_db()
-        companies = c.execute("SELECT id, name, slug, currency, created_at FROM companies").fetchall()
+        companies = c.execute("SELECT id, name, slug, currency, brand_color, created_at FROM companies").fetchall()
         c.close()
         st.markdown(f"**{len(companies)} {tt('companies_count', L)}**")
         for comp in companies:
             with st.expander(f"🏢 **{comp['name']}** ({comp['slug']}) — {comp['currency']}"):
+                # Brand color picker
+                bc = st.color_picker(tt("brand_color", L), value=comp.get('brand_color') or '#4e8cff', key=f"bc_{comp['id']}")
+                if st.button("💾 " + tt("save_color", L), key=f"bcs_{comp['id']}"):
+                    c2 = get_db(); c2.execute("UPDATE companies SET brand_color=? WHERE id=?", (bc, comp['id'])); c2.commit(); c2.close()
+                    st.success("✅"); st.rerun()
+                st.markdown("---")
                 # Users of this company
                 c2 = get_db()
                 users = c2.execute("SELECT id, username, display_name, role, raw_password FROM users WHERE company_id=?", (comp['id'],)).fetchall()

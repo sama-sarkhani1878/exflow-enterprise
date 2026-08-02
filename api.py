@@ -13,9 +13,9 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, Query, Depends
 from pydantic import BaseModel
 
-app = FastAPI(title="ExFlow Enterprise API", version="1.0.0")
+from db import DB_PATH, init_db
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "exflow.db")
+app = FastAPI(title="ExFlow Enterprise API", version="1.0.0")
 
 # Single shared connection for API (SQLite concurrent write workaround)
 _conn = None

@@ -1,0 +1,25 @@
+# ExFlow Enterprise — docker-compose
+# Run: docker compose up -d
+services:
+  app:
+    build: .
+    container_name: exflow-enterprise
+    ports:
+      - "8503:8503"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - EXFLOW_ADMIN_PW=admin123
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: exflow-api
+    command: ["python3", "api.py"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - app
