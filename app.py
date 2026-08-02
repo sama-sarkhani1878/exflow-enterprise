@@ -1012,7 +1012,7 @@ elif page.startswith("🏗️"):
         for comp in companies:
             with st.expander(f"🏢 **{comp['name']}** ({comp['slug']}) — {comp['currency']}"):
                 # Brand color picker
-                bc = st.color_picker(tt("brand_color", L), value=comp.get('brand_color') or '#4e8cff', key=f"bc_{comp['id']}")
+                bc = st.color_picker(tt("brand_color", L), value=comp['brand_color'] or '#4e8cff', key=f"bc_{comp['id']}")
                 if st.button("💾 " + tt("save_color", L), key=f"bcs_{comp['id']}"):
                     c2 = get_db(); c2.execute("UPDATE companies SET brand_color=? WHERE id=?", (bc, comp['id'])); c2.commit(); c2.close()
                     st.success("✅"); st.rerun()
