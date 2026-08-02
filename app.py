@@ -142,6 +142,32 @@ T = {
     "backup": {"fa": "پشتیبان‌گیری", "de": "Backup", "en": "Backup"},
     "backup_hint": {"fa": "یک نسخه پشتیبان از دیتابیس در پوشه backups گرفته می‌شود.", "de": "Eine Datenbank-Sicherung wird im backups-Ordner erstellt.", "en": "A database backup is created in the backups folder."},
     "do_backup": {"fa": "ایجاد نسخه پشتیبان", "de": "Backup erstellen", "en": "Create backup"},
+    "company": {"fa": "شرکت", "de": "Unternehmen", "en": "Company"},
+    "ocr_upload": {"fa": "📎 عکس فاکتور رو آپلود کن", "de": "📎 Rechnungsfoto hochladen", "en": "📎 Upload invoice photo"},
+    "ocr_processing": {"fa": "در حال پردازش...", "de": "Verarbeitung...", "en": "Processing..."},
+    "ocr_uploaded_cap": {"fa": "فاکتور آپلود شده", "de": "Hochgeladene Rechnung", "en": "Uploaded invoice"},
+    "ocr_method": {"fa": "روش تشخیص", "de": "Erkennungsmethode", "en": "Detection method"},
+    "ocr_confidence": {"fa": "دقت", "de": "Genauigkeit", "en": "Confidence"},
+    "ocr_vendor": {"fa": "فروشنده", "de": "Anbieter", "en": "Vendor"},
+    "ocr_date_lbl": {"fa": "تاریخ", "de": "Datum", "en": "Date"},
+    "ocr_amount_lbl": {"fa": "مبلغ", "de": "Betrag", "en": "Amount"},
+    "ocr_detected_text": {"fa": "متن تشخیص داده شده", "de": "Erkannter Text", "en": "Detected text"},
+    "ocr_no_text": {"fa": "متنی تشخیص داده نشد", "de": "Kein Text erkannt", "en": "No text detected"},
+    "ocr_quick_add": {"fa": "ثبت سریع از روی فاکتور", "de": "Schnell aus Rechnung erfassen", "en": "Quick add from invoice"},
+    "ocr_saved": {"fa": "هزینه ثبت شد!", "de": "Ausgabe erfasst!", "en": "Expense saved!"},
+    "api_no_key": {"fa": "هنوز API Key ای ساخته نشده. از بخش تنظیمات یه API Key بساز.", "de": "Noch kein API-Key erstellt. Erstellen Sie einen in den Einstellungen.", "en": "No API key yet. Create one in Settings."},
+    "api_docs": {"fa": "مستندات API", "de": "API-Dokumentation", "en": "API documentation"},
+    "api_new_key": {"fa": "ایجاد API Key جدید", "de": "Neuen API Key erstellen", "en": "Create new API key"},
+    "api_key_created": {"fa": "API Key ساخته شد! کپی کن و ذخیره کن.", "de": "API Key erstellt! Kopieren und speichern.", "en": "API key created! Copy and save it."},
+    "new_company": {"fa": "شرکت جدید", "de": "Neues Unternehmen", "en": "New company"},
+    "company_name": {"fa": "نام شرکت", "de": "Unternehmensname", "en": "Company name"},
+    "slug": {"fa": "شناسه (slug)", "de": "Kennung (slug)", "en": "Slug"},
+    "currency": {"fa": "واحد پول", "de": "Währung", "en": "Currency"},
+    "role": {"fa": "نقش", "de": "Rolle", "en": "Role"},
+    "display_name": {"fa": "نام نمایشی", "de": "Anzeigename", "en": "Display name"},
+    "add_user": {"fa": "افزودن کاربر", "de": "Benutzer hinzufügen", "en": "Add user"},
+    "delete": {"fa": "حذف", "de": "Löschen", "en": "Delete"},
+    "delete_user": {"fa": "حذف کاربر", "de": "Benutzer löschen", "en": "Delete user"},
 }
 
 def tt(key, lang="fa"):
@@ -565,7 +591,7 @@ elif page.startswith("📋"):
                 all_comps = _c.execute("SELECT id, name FROM companies").fetchall()
                 _c.close()
                 comp_opts = [c["name"] for c in all_comps]
-                comp_sel = st.selectbox("🏢 شرکت", comp_opts, key="ef_comp")
+                comp_sel = st.selectbox(tt("company", L), comp_opts, key="ef_comp")
                 form_cid = all_comps[comp_opts.index(comp_sel)]["id"]
             cat_opts = [f"{c['icon']} {ct(c['name'], L)}" for c in cats]
             cat_lookup = {ct(c['name'], L): c['name'] for c in cats}
@@ -599,7 +625,7 @@ elif page.startswith("📋"):
                 comps2 = _c2.execute("SELECT id, name FROM companies").fetchall()
                 _c2.close()
                 opts2 = [c["name"] for c in comps2]
-                sel2 = st.selectbox("🏢 شرکت", opts2, key="if_comp")
+                sel2 = st.selectbox(tt("company", L), opts2, key="if_comp")
                 form_cid2 = comps2[opts2.index(sel2)]["id"]
             st.number_input(tt("amount",L), min_value=0.01, step=100.0, key="ia")
             st.text_input(tt("source",L), placeholder=tt("source_ph", L), key="src")
@@ -717,7 +743,7 @@ elif page.startswith("🎯"):
                 comps3 = _c3.execute("SELECT id, name FROM companies").fetchall()
                 _c3.close()
                 opts3 = [c["name"] for c in comps3]
-                sel3 = st.selectbox("🏢 شرکت", opts3, key="bf_comp")
+                sel3 = st.selectbox(tt("company", L), opts3, key="bf_comp")
                 form_cid3 = comps3[opts3.index(sel3)]["id"]
             cat_opts2 = [f"{c['icon']} {ct(c['name'], L)}" for c in cats]
             cat_lookup2 = {ct(c['name'], L): c['name'] for c in cats}
@@ -761,7 +787,7 @@ elif page.startswith("👥"):
                 st.markdown(f"👤 **{u['display_name'] or u['username']}** — {u['role']}")
             with col2:
                 if u['username'] != 'admin':
-                    if st.button("🗑️", key=f"du{u['id']}", help="حذف کاربر"):
+                    if st.button("🗑️", key=f"du{u['id']}", help=tt("delete_user", L)):
                         c2 = get_db()
                         c2.execute("DELETE FROM users WHERE id=? AND username!='admin'", (u['id'],))
                         c2.commit(); c2.close()
@@ -792,54 +818,56 @@ elif page.startswith("📄"):
         st.info("Install: brew install tesseract && python3 -m pip install pytesseract")
         st.stop()
     
-    uploaded_file = st.file_uploader("📎 عکس فاکتور رو آپلود کن", type=["png", "jpg", "jpeg", "pdf"])
+    uploaded_file = st.file_uploader(tt("ocr_upload", L), type=["png", "jpg", "jpeg", "pdf"])
     if uploaded_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
             tmp.write(uploaded_file.getvalue())
             tmp_path = tmp.name
         
-        with st.spinner("🔄 در حال پردازش..."):
+        with st.spinner("🔄 " + tt("ocr_processing", L)):
             result = extract_from_image(tmp_path, lang="deu+eng+ara")
         
         st.markdown("---")
         col1, col2 = st.columns([1, 1])
         with col1:
-            st.image(uploaded_file, caption="فاکتور آپلود شده", width=300)
+            st.image(uploaded_file, caption=tt("ocr_uploaded_cap", L), width=300)
         with col2:
-            st.markdown(f"**📋 روش تشخیص:** {result['method']}")
+            st.markdown(f"**📋 {tt('ocr_method', L)}:** {result['method']}")
             if result['confidence']:
-                st.markdown(f"**🎯 دقت:** {result['confidence']}%")
-            st.markdown(f"**🏢 فروشنده:** {result['vendor'] or '—'}")
-            st.markdown(f"**📅 تاریخ:** {result['date'] or '—'}")
-            st.markdown(f"**💰 مبلغ:** {result['amount']:,.2f}€" if result['amount'] else "**💰 مبلغ:** —")
+                st.markdown(f"**🎯 {tt('ocr_confidence', L)}:** {result['confidence']}%")
+            st.markdown(f"**🏢 {tt('ocr_vendor', L)}:** {result['vendor'] or '—'}")
+            st.markdown(f"**📅 {tt('ocr_date_lbl', L)}:** {result['date'] or '—'}")
+            st.markdown(f"**💰 {tt('ocr_amount_lbl', L)}:** {result['amount']:,.2f}€" if result['amount'] else f"**💰 {tt('ocr_amount_lbl', L)}:** —")
         
-        with st.expander("📝 متن تشخیص داده شده"):
-            st.code(result['text'] if result['text'] else "متنی تشخیص داده نشد")
+        with st.expander("📝 " + tt("ocr_detected_text", L)):
+            st.code(result['text'] if result['text'] else tt("ocr_no_text", L))
         
         # Quick add expense from invoice
         if result['amount'] > 0:
             st.markdown("---")
-            st.markdown("### ➕ ثبت سریع از روی فاکتور")
+            st.markdown(f"### ➕ {tt('ocr_quick_add', L)}")
             with st.form("ocr_add"):
-                suggested_cat = "سایر"
+                suggested_cat = "Other"
                 if "lebensmittel" in result['text'].lower() or "food" in result['text'].lower():
-                    suggested_cat = "خوراک"
+                    suggested_cat = "Food"
                 elif "transport" in result['text'].lower() or "ticket" in result['text'].lower() or "bahn" in result['text'].lower():
-                    suggested_cat = "حمل و نقل"
+                    suggested_cat = "Transport"
                 elif "apotheke" in result['text'].lower() or "health" in result['text'].lower() or "arzt" in result['text'].lower():
-                    suggested_cat = "سلامتی"
+                    suggested_cat = "Health"
                 cat_opts = [f"{c['icon']} {c['name']}" for c in cats]
-                ocr_cat = st.selectbox("دسته", cat_opts, index=0)
-                ocr_amt = st.number_input("مبلغ (€)", value=float(result['amount']), format="%.2f")
-                ocr_desc = st.text_input("توضیح", value=result['vendor'] or "فاکتور اسکن شده")
-                ocr_date = st.date_input("تاریخ", value=datetime.now())
-                if st.form_submit_button("✅ ثبت هزینه", use_container_width=True):
+                ocr_cat = st.selectbox(tt("category", L), cat_opts, index=0)
+                ocr_amt = st.number_input(tt("amount", L) + " (€)", value=float(result['amount']), format="%.2f")
+                ocr_desc = st.text_input(tt("description", L), value=result['vendor'] or tt("ocr_uploaded_cap", L))
+                ocr_date = st.date_input(tt("date", L), value=datetime.now())
+                if st.form_submit_button(f"✅ {tt('add_expense', L)}", use_container_width=True):
                     cat_name = ocr_cat.split(" ", 1)[1]
                     c = get_db()
                     c.execute("INSERT INTO expenses(company_id,amount,category,description,date,created_by) VALUES(?,?,?,?,?,?)",
                              (CID, ocr_amt, cat_name, ocr_desc, ocr_date.strftime("%Y-%m-%d"), user["id"]))
-                    c.commit(); c.close()
-                    st.success("✅ هزینه ثبت شد!"); st.rerun()
+                    c.commit()
+                    log_activity(CID, user["id"], user["username"], "add_expense_ocr", f"{ocr_amt}€ {cat_name}")
+                    c.close()
+                    st.success("✅ " + tt("ocr_saved", L)); st.rerun()
         
         os.unlink(tmp_path)
 
@@ -911,13 +939,13 @@ elif page.startswith("⚙️"):
                 st.code(k["key"][:20] + "...", language="text")
                 if st.button("🗑️", key=f"ak{k['id']}"):
                     c2 = get_db(); c2.execute("DELETE FROM api_keys WHERE id=?", (k["id"],)); c2.commit(); c2.close(); st.rerun()
-        if st.button("🔑 + ایجاد API Key جدید"):
+        if st.button("🔑 + " + tt("api_new_key", L)):
             from api import create_api_key
             import secrets
             new_key = secrets.token_hex(32)
             c = get_db(); c.execute("INSERT INTO api_keys(company_id, key) VALUES(?,?)", (CID, new_key)); c.commit(); c.close()
             st.code(new_key, language="text")
-            st.success("API Key ساخته شد! کپی کن و ذخیره کن.")
+            st.success(tt("api_key_created", L))
 
 elif page.startswith("🔗"):
     # ─── API DOCUMENTATION ───
@@ -933,9 +961,9 @@ elif page.startswith("🔗"):
         for k in keys:
             st.code(k["key"], language="text")
     else:
-        st.info("هنوز API Key ای ساخته نشده. از بخش تنظیمات یه API Key بساز.")
+        st.info(tt("api_no_key", L))
     
-    with st.expander("📖 مستندات API"):
+    with st.expander("📖 " + tt("api_docs", L)):
         st.markdown("""
         **Base URL:** `http://localhost:8000`
         
@@ -1002,26 +1030,26 @@ elif page.startswith("🏗️"):
                     with col3:
                         st.markdown(f"**{u['role']}**")
                     with col4:
-                        if st.button("✏️", key=f"eu{comp['id']}_{u['id']}", help="ویرایش"):
+                        if st.button("✏️", key=f"eu{comp['id']}_{u['id']}", help=tt("edit", L)):
                             st.session_state[f"edit_user_{u['id']}"] = True
                         if u['username'] != 'admin':
-                            if st.button("🗑️", key=f"cu{comp['id']}_{u['id']}", help="حذف"):
+                            if st.button("🗑️", key=f"cu{comp['id']}_{u['id']}", help=tt("delete", L)):
                                 c2 = get_db(); c2.execute("DELETE FROM users WHERE id=? AND username!='admin'", (u['id'],)); c2.commit(); c2.close(); st.rerun()
                     
                     # Edit form (shown when ✏️ clicked)
                     if st.session_state.get(f"edit_user_{u['id']}"):
                         with st.form(f"edit_form_{u['id']}"):
-                            st.markdown(f"**✏️ ویرایش `{u['username']}`**")
+                            st.markdown(f"**✏️ {tt('edit', L)} `{u['username']}`**")
                             ec = st.columns(3)
                             with ec[0]:
-                                new_pass = st.text_input("رمز جدید", type="password", key=f"ep{u['id']}")
+                                new_pass = st.text_input(tt("new_pass", L), type="password", key=f"ep{u['id']}")
                             with ec[1]:
-                                new_name = st.text_input("نام نمایشی", value=u['display_name'] or "", key=f"en{u['id']}")
+                                new_name = st.text_input(tt("display_name", L), value=u['display_name'] or "", key=f"en{u['id']}")
                             with ec[2]:
-                                new_role = st.selectbox("نقش", ["user", "admin"], index=0 if u['role']=='user' else 1, key=f"er{u['id']}")
+                                new_role = st.selectbox(tt("role", L), ["user", "admin"], index=0 if u['role']=='user' else 1, key=f"er{u['id']}")
                             ec2 = st.columns(2)
                             with ec2[0]:
-                                if st.form_submit_button("💾 ذخیره"):
+                                if st.form_submit_button("💾 " + tt("save", L)):
                                     c2 = get_db()
                                     if new_pass:
                                         c2.execute("UPDATE users SET password_hash=?, raw_password=?, display_name=?, role=? WHERE id=?",
@@ -1031,24 +1059,24 @@ elif page.startswith("🏗️"):
                                             (new_name, new_role, u['id']))
                                     c2.commit(); c2.close()
                                     st.session_state[f"edit_user_{u['id']}"] = False
-                                    st.success("✅ ویرایش شد"); st.rerun()
+                                    st.success("✅"); st.rerun()
                             with ec2[1]:
-                                if st.form_submit_button("❌ لغو"):
+                                if st.form_submit_button("❌"):
                                     st.session_state[f"edit_user_{u['id']}"] = False
                                     st.rerun()
                 
                 # Add user form
                 with st.form(f"add_user_{comp['id']}"):
-                    st.markdown("**➕ کاربر جدید**")
+                    st.markdown(f"**➕ {tt('add_user', L)}**")
                     cols = st.columns(3)
                     with cols[0]:
-                        nu = st.text_input("نام کاربری", key=f"nu{comp['id']}")
+                        nu = st.text_input(tt("username", L), key=f"nu{comp['id']}")
                     with cols[1]:
-                        np = st.text_input("رمز عبور", type="password", key=f"np{comp['id']}")
+                        np = st.text_input(tt("password", L), type="password", key=f"np{comp['id']}")
                     with cols[2]:
-                        nd = st.text_input("نام نمایشی", key=f"nd{comp['id']}")
-                    nr = st.selectbox("نقش", ["user", "admin"], key=f"nr{comp['id']}")
-                    if st.form_submit_button("➕ اضافه کن", use_container_width=True):
+                        nd = st.text_input(tt("display_name", L), key=f"nd{comp['id']}")
+                    nr = st.selectbox(tt("role", L), ["user", "admin"], key=f"nr{comp['id']}")
+                    if st.form_submit_button("➕ " + tt("add", L), use_container_width=True):
                         c2 = get_db()
                         try:
                             c2.execute("INSERT INTO users(username,password_hash,raw_password,role,company_id,display_name) VALUES(?,?,?,?,?,?)",
@@ -1057,15 +1085,15 @@ elif page.startswith("🏗️"):
                         except Exception as e: st.error(str(e))
                         c2.close()
         st.markdown("---")
-        st.markdown("### ➕ شرکت جدید")
+        st.markdown(f"### ➕ {tt('new_company', L)}")
         with st.form("cf"):
-            nm = st.text_input("نام شرکت")
-            sl = st.text_input("شناسه (slug)")
-            cr = st.selectbox("واحد پول", ["EUR", "USD", "GBP"])
-            if st.form_submit_button("➕ ایجاد", use_container_width=True):
+            nm = st.text_input(tt("company_name", L))
+            sl = st.text_input(tt("slug", L))
+            cr = st.selectbox(tt("currency", L), ["EUR", "USD", "GBP"])
+            if st.form_submit_button("➕ " + tt("add", L), use_container_width=True):
                 c2 = get_db()
                 try:
                     c2.execute("INSERT INTO companies(name,slug,currency) VALUES(?,?,?)", (nm, sl, cr))
-                    c2.commit(); st.success(f"شرکت {nm} ایجاد شد"); st.rerun()
+                    c2.commit(); st.success(f"✅ {nm}"); st.rerun()
                 except Exception as e: st.error(str(e))
                 c2.close()
