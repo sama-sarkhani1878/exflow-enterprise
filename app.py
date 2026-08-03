@@ -231,6 +231,8 @@ T = {
     "delete_user": {"fa": "حذف کاربر", "de": "Benutzer löschen", "en": "Delete user"},
     "search": {"fa": "جستجو", "de": "Suchen", "en": "Search"},
     "search_ph": {"fa": "توضیح، دسته یا تاریخ...", "de": "Beschreibung, Kategorie oder Datum...", "en": "Description, category or date..."},
+    "ai_insights": {"fa": "دستیار هوشمند", "de": "KI-Assistent", "en": "AI Assistant"},
+    "ai_cat": {"fa": "پیشنهاد هوشمند دسته", "de": "KI-Kategorievorschlag", "en": "AI category suggestion"},
 }
 
 def tt(key, lang="fa"):
@@ -548,6 +550,16 @@ if page.startswith("📊"):
     with c4: st.metric(f"📊 {tt('avg',L)}", f"{ad:.1f}€")
     with c5: st.metric(f"📋 {tt('count',L)}", f"{nt}")
 
+    # ─── 🤖 AI Insights ───
+    from ai_assistant import monthly_insights
+    ins = monthly_insights(CID, lang=L, month=selected_month)
+    if ins:
+        with st.expander(f"🤖 {tt('ai_insights', L)}", expanded=True):
+            for it in ins:
+                st.markdown(f"<div style='display:flex;gap:10px;align-items:flex-start;padding:6px 0;'>"
+                            f"<span style='font-size:1.1rem;'>{it['icon']}</span>"
+                            f"<span style='color:#e2e8f0;'>{it['text']}</span></div>", unsafe_allow_html=True)
+
     # PDF Report button
     col_pdf1, col_pdf2 = st.columns([1, 5])
     with col_pdf1:
@@ -689,14 +701,21 @@ elif page.startswith("📋"):
                 form_cid = all_comps[comp_opts.index(comp_sel)]["id"]
             cat_opts = [f"{c['icon']} {ct(c['name'], L)}" for c in cats]
             cat_lookup = {ct(c['name'], L): c['name'] for c in cats}
-            sc = st.selectbox(tt("category",L), cat_opts).split(" ", 1)[1]
-            sc_db = cat_lookup.get(sc, sc)
+            ds0 = st.text_input(tt("description",L), key="ai_desc")
+            # AI auto-categorize
+            from ai_assistant import suggest_category
+            _sug = suggest_category(ds0)
+            cat_order = [c['name'] for c in cats]
+            _def_idx = cat_order.index(_sug) if _sug in cat_order else 0
+            cat_sel = st.selectbox(tt("category",L), cat_opts, index=_def_idx)
+            sc_db = cat_lookup.get(cat_sel.split(" ", 1)[1], cat_sel.split(" ", 1)[1])
+            if ds0 and _sug in cat_order:
+                st.caption(f"🤖 {tt('ai_cat', L)}: {ct(_sug, L)}")
             am = st.number_input(tt("amount",L), min_value=0.01, step=1.0)
-            ds = st.text_input(tt("description",L))
             td = st.date_input(tt("date",L), value=today)
             if st.form_submit_button(f"✅ {tt('save',L)}", use_container_width=True):
                 c = get_db(); c.execute("INSERT INTO expenses(company_id,amount,category,description,date,created_by) VALUES(?,?,?,?,?,?)",
-                    (form_cid, am, sc_db, ds, td.strftime("%Y-%m-%d"), user["id"]))
+                    (form_cid, am, sc_db, ds0, td.strftime("%Y-%m-%d"), user["id"]))
                 c.commit()
                 log_activity(form_cid, user["id"], user["username"], "add_expense", f"{am}€ {sc_db}")
                 # ── Budget warning check ──
