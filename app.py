@@ -61,6 +61,67 @@ pwa_html = f"""
 """
 st.markdown(pwa_html, unsafe_allow_html=True)
 
+# ─── Modern theme (custom CSS) ───
+MODERN_CSS = """
+<style>
+/* ── Base ── */
+.stApp {
+    background: linear-gradient(160deg, #0f172a 0%, #1e293b 55%, #0f172a 100%) !important;
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0b1220 0%, #111c30 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+/* ── Headings ── */
+h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em; }
+h1 { background: linear-gradient(90deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+/* ── Cards / metrics ── */
+[data-testid="stMetric"] {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px 16px;
+    transition: transform .15s ease, border-color .15s ease;
+}
+[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: rgba(96,165,250,0.5); }
+[data-testid="stMetricLabel"] { color: #94a3b8 !important; font-size: .8rem; }
+[data-testid="stMetricValue"] { color: #f8fafc !important; font-size: 1.7rem !important; font-weight: 700; }
+/* ── Buttons ── */
+.stButton > button, .stFormSubmitButton > button {
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(96,165,250,0.35) !important;
+    transition: all .15s ease;
+}
+.stButton > button:hover, .stFormSubmitButton > button:hover {
+    background: rgba(96,165,250,0.15) !important;
+    border-color: #60a5fa !important;
+    transform: translateY(-1px);
+}
+/* ── Expanders ── */
+[data-testid="stExpander"] {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+}
+/* ── Inputs ── */
+.stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] > div {
+    border-radius: 10px !important;
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    color: #f8fafc !important;
+}
+/* ── Tabs / radio ── */
+[data-testid="stRadio"] label { color: #cbd5e1 !important; }
+[data-testid="stRadio"] label:hover { color: #60a5fa !important; }
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+"""
+st.markdown(MODERN_CSS, unsafe_allow_html=True)
+
 # ─── DB & Auth helpers (shared module — also used by api.py & tests) ───
 from db import get_db, init_db, login as _db_login, logout as _db_logout, get_user_by_token, log_activity, DB_PATH
 
@@ -168,6 +229,8 @@ T = {
     "add_user": {"fa": "افزودن کاربر", "de": "Benutzer hinzufügen", "en": "Add user"},
     "delete": {"fa": "حذف", "de": "Löschen", "en": "Delete"},
     "delete_user": {"fa": "حذف کاربر", "de": "Benutzer löschen", "en": "Delete user"},
+    "search": {"fa": "جستجو", "de": "Suchen", "en": "Search"},
+    "search_ph": {"fa": "توضیح، دسته یا تاریخ...", "de": "Beschreibung, Kategorie oder Datum...", "en": "Description, category or date..."},
 }
 
 def tt(key, lang="fa"):
@@ -305,6 +368,21 @@ MONTH_NAMES = {
 def month_name(m_num, lang):
     return MONTH_NAMES.get(m_num, {}).get(lang, "")
 
+
+JALALI_MONTHS = {
+    1: "فروردین", 2: "اردیبهشت", 3: "خرداد", 4: "تیر", 5: "مرداد", 6: "شهریور",
+    7: "مهر", 8: "آبان", 9: "آذر", 10: "دی", 11: "بهمن", 12: "اسفند",
+}
+
+def jalali_now_str():
+    """Return today as 'YYYY-MM-DD' in the Persian (Jalali) calendar."""
+    try:
+        import jdatetime
+        t = jdatetime.date.today()
+        return f"{t.year:04d}-{t.month:02d}-{t.day:02d}"
+    except Exception:
+        return today_str
+
 # ─── Sidebar ───
 with st.sidebar:
     role = user["role"]
@@ -414,15 +492,31 @@ df = pd.DataFrame(ex) if ex else pd.DataFrame()
 
 # ═══ DATE BADGE ═══
 # Live date badge like ExFlow personal
+if L == "fa":
+    try:
+        import jdatetime
+        jt = jdatetime.date.today()
+        date_line = f"{JALALI_MONTHS.get(jt.month, '')} {jt.year} — {dim - today.day} {tt('days_remaining', L)}"
+        month_short = JALALI_MONTHS.get(jt.month, "")[:3]
+        day_num = jt.day
+    except Exception:
+        date_line = f"{month_name(today.month, L)} {today.year} — {dim - today.day} {tt('days_remaining', L)}"
+        month_short = month_name(today.month, L)[:3]
+        day_num = today.day
+else:
+    date_line = f"{month_name(today.month, L)} {today.year} — {dim - today.day} {tt('days_remaining', L)}"
+    month_short = month_name(today.month, L)[:3]
+    day_num = today.day
+
 st.markdown(f"""
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
 <div style="background:linear-gradient(135deg,#f7b733,#fc4a1a);border-radius:6px;width:42px;height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
-<span style="font-size:9px;color:#fff;opacity:0.85;font-weight:600;">{month_name(today.month, L)[:3]}</span>
-<span style="font-size:16px;color:#fff;font-weight:900;">{today.day:02d}</span>
+<span style="font-size:9px;color:#fff;opacity:0.85;font-weight:600;">{month_short}</span>
+<span style="font-size:16px;color:#fff;font-weight:900;">{day_num:02d}</span>
 </div>
 <div style="flex:1;"></div>
 <div style="font-size:0.85rem;color:#888;">
-{month_name(today.month, L)} {today.year} — {dim - today.day} {tt("days_remaining", L)}
+{date_line}
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -639,8 +733,15 @@ elif page.startswith("📋"):
                 c.close(); st.rerun()
     with cl:
         st.markdown(f"### 📋 {tt('list',L)}")
-        if ex:
-            for e in ex:
+        # ── Search / filter ──
+        search_q = st.text_input("🔍 " + tt("search", L), key="exp_search", placeholder=tt("search_ph", L))
+        shown = ex
+        if search_q:
+            q = search_q.lower()
+            shown = [e for e in ex if q in (e.get('description') or '').lower() or q in e.get('category', '').lower() or q in e.get('date', '')]
+        st.caption(f"{tt('count', L)}: {len(shown)}")
+        if shown:
+            for e in shown:
                 ci = cmap.get(e["category"], {"icon": "📌", "color": "#6b7280"})
                 col_e, col_btn = st.columns([5, 1])
                 with col_e:
