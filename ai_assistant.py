@@ -156,3 +156,85 @@ def suggest_budget(company_id, category, month=None):
     if spent > 0:
         return round(spent * 1.1, 2), spent
     return None, spent
+
+
+def forecast_next_month(company_id, lang="en"):
+    """
+    Estimate next month's expenses as the average of the last 3 months
+    (fallback to this month if fewer). Returns a human-readable string.
+    """
+    from db import get_db
+    c = get_db()
+    now = datetime.now()
+    totals = []
+    ym = now
+    for _ in range(3):
+        m = f"{ym.year}-{ym.month:02d}"
+        tot = c.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ?",
+                        (company_id, m + "%")).fetchone()[0]
+        totals.append(tot)
+        # previous month
+        if ym.month == 1:
+            ym = ym.replace(year=ym.year - 1, month=12)
+        else:
+            ym = ym.replace(month=ym.month - 1)
+    c.close()
+    recent = [t for t in totals if t > 0]
+    avg = sum(recent) / len(recent) if recent else 0.0
+    nxt_ym = (datetime(now.year, now.month, 1).replace(month=now.month + 1)
+              if now.month < 12 else datetime(now.year + 1, 1, 1))
+    texts = {
+        "en": f"Based on the last {len(recent)} months, next month's spending is estimated around {avg:,.0f}€.",
+        "de": f"Basierend auf den letzten {len(recent)} Monaten werden die Ausgaben nächsten Monat auf etwa {avg:,.0f}€ geschätzt.",
+        "fa": f"بر اساس {len(recent)} ماه گذشته، هزینه ماه آینده حدود {avg:,.0f}€ تخمین زده می‌شود.",
+    }
+    return texts.get(lang, texts["en"])
+
+
+def chat(company_id, question, lang="en"):
+    """
+    Lightweight rule-based 'talk to your data' assistant.
+    Understands a few intents dynamically; returns a helpful answer.
+    """
+    q = (question or "").lower()
+    from db import get_db
+    c = get_db()
+    now = datetime.now()
+    m = f"{now.year}-{now.month:02d}"
+    ex = c.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ?", (company_id, m + "%")).fetchone()[0]
+    inc = c.execute("SELECT COALESCE(SUM(amount),0) FROM income WHERE company_id=? AND date LIKE ?", (company_id, m + "%")).fetchone()[0]
+    c.close()
+
+    t = {
+        "en": {
+            "spent": f"This month you've spent {ex:,.0f}€.",
+            "income": f"This month's income is {inc:,.0f}€.",
+            "balance": f"Current balance: {inc-ex:+,.0f}€.",
+            "hello": "Hi! I can tell you about this month's spending, income, or balance. Try asking: 'how much did I spend?'",
+            "unknown": "I can help with questions about this month's spending, income, and balance.",
+        },
+        "de": {
+            "spent": f"Diesen Monat haben Sie {ex:,.0f}€ ausgegeben.",
+            "income": f"Das Einkommen diesen Monat beträgt {inc:,.0f}€.",
+            "balance": f"Aktuelles Guthaben: {inc-ex:+,.0f}€.",
+            "hello": "Hallo! Ich kann über Ausgaben, Einkommen oder Guthaben Auskunft geben.",
+            "unknown": "Ich kann bei Fragen zu Ausgaben, Einkommen und Guthaben helfen.",
+        },
+        "fa": {
+            "spent": f"این ماه {ex:,.0f}€ خرج کرده‌ای.",
+            "income": f"درآمد این ماه {inc:,.0f}€ است.",
+            "balance": f"مانده فعلی: {inc-ex:+,.0f}€.",
+            "hello": "سلام! می‌تونم درباره هزینه، درآمد یا مانده این ماه کمک کنم.",
+            "unknown": "می‌تونم درباره هزینه، درآمد و مانده این ماه کمک کنم.",
+        },
+    }
+    x = t.get(lang, t["en"])
+    if any(w in q for w in ["spend", "ausgegeben", "خرج", "خرج کرد", "cost", "costs"]):
+        return x["spent"]
+    if any(w in q for w in ["income", "einkommen", "درآمد", "earn", "earned"]):
+        return x["income"]
+    if any(w in q for w in ["balance", "guthaben", "مانده", "konto"]):
+        return x["balance"]
+    if any(w in q for w in ["hi", "hello", "hey", "سلام", "hallo"]):
+        return x["hello"]
+    return x["unknown"]

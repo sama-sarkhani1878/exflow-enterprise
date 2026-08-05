@@ -233,6 +233,15 @@ T = {
     "search_ph": {"fa": "توضیح، دسته یا تاریخ...", "de": "Beschreibung, Kategorie oder Datum...", "en": "Description, category or date..."},
     "ai_insights": {"fa": "دستیار هوشمند", "de": "KI-Assistent", "en": "AI Assistant"},
     "ai_cat": {"fa": "پیشنهاد هوشمند دسته", "de": "KI-Kategorievorschlag", "en": "AI category suggestion"},
+    "ai_assistant": {"fa": "دستیار هوشمند", "de": "KI-Assistent", "en": "AI Assistant"},
+    "ai_caption": {"fa": "از دستیار هوشمند بپرس — تحلیل، پیش‌بینی و پیشنهاد", "de": "Frag den KI-Assistenten — Analyse, Prognose, Empfehlung", "en": "Ask the AI assistant — analysis, forecast, suggestions"},
+    "ai_chat": {"fa": "گفتگو با داده‌ها", "de": "Chat mit deinen Daten", "en": "Chat with your data"},
+    "ai_ask": {"fa": "سوال تو", "de": "Deine Frage", "en": "Your question"},
+    "ai_ask_ph": {"fa": "مثلاً: این ماه چقدر خرج کردم؟", "de": "z.B. Wie viel habe ich ausgegeben?", "en": "e.g. How much did I spend this month?"},
+    "ai_send": {"fa": "ارسال", "de": "Senden", "en": "Send"},
+    "ai_forecast": {"fa": "پیش‌بینی ماه آینده", "de": "Prognose nächster Monat", "en": "Next month forecast"},
+    "ai_inspire": {"fa": "بینش‌های این ماه", "de": "Einblicke diesen Monat", "en": "This month's insights"},
+    "ai_cat_lbl": {"fa": "دسته‌بندی هوشمند", "de": "Intelligente Kategorisierung", "en": "Smart categorization"},
 }
 
 def tt(key, lang="fa"):
@@ -422,7 +431,7 @@ with st.sidebar:
         CID = sel_comp_id
     st.markdown("---")
     # Role-based navigation
-    nav_items = [f"📊 {tt('dashboard',L)}", f"📋 {tt('transactions',L)}", f"🎯 {tt('budget',L)}"]
+    nav_items = [f"🤖 {tt('ai_assistant',L)}", f"📊 {tt('dashboard',L)}", f"📋 {tt('transactions',L)}", f"🎯 {tt('budget',L)}"]
     if role in ("admin", "superadmin"):
         nav_items.append(f"👥 {tt('users',L)}")
     if role == "superadmin":
@@ -526,6 +535,36 @@ st.markdown(f"""
 # ═══════════════════════════════════════════
 # PAGE ROUTER
 # ═══════════════════════════════════════════
+
+if page.startswith("🤖"):
+    # ─── AI ASSISTANT ───
+    from ai_assistant import chat, forecast_next_month, monthly_insights, suggest_budget, suggest_category
+    st.markdown(f"# 🤖 {tt('ai_assistant', L)}")
+    st.caption(tt("ai_caption", L))
+
+    col_chat, col_ai = st.columns([1, 1])
+    with col_chat:
+        st.markdown(f"### 💬 {tt('ai_chat', L)}")
+        q = st.text_input(tt("ai_ask", L), key="ai_q", placeholder=tt("ai_ask_ph", L))
+        if q and st.button(f"🚀 {tt('ai_send', L)}"):
+            st.markdown(f"> **You:** {q}")
+            ans = chat(CID, q, lang=L)
+            st.success(f"🤖 {ans}")
+        with st.expander(f"📈 {tt('ai_forecast', L)}"):
+            st.markdown("🧠 " + forecast_next_month(CID, lang=L))
+            # smart budget suggestion
+            for cat in [c["name"] for c in cats]:
+                sug, spent = suggest_budget(CID, cat, month=cur_month)
+                if sug:
+                    st.markdown(f"• **{cat}**: پیشنهاد {sug:,.0f}€ (ماه قبل {spent:,.0f}€)")
+    with col_ai:
+        st.markdown(f"### ✨ {tt('ai_inspire', L)}")
+        ins = monthly_insights(CID, lang=L, month=cur_month)
+        if ins:
+            for it in ins:
+                st.markdown(f"- {it['icon']} {it['text']}")
+        st.markdown("---")
+        st.markdown(f"### 🏷️ {tt('ai_cat_lbl', L)}")
 
 if page.startswith("📊"):
     # ─── DASHBOARD ───
