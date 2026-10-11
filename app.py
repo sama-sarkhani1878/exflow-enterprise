@@ -746,31 +746,29 @@ elif page.startswith("📋"):
             _sug = suggest_category(ds0)
             cat_order = [c['name'] for c in cats]
             _def_idx = cat_order.index(_sug) if _sug in cat_order else 0
-            cat_sel = st.selectbox(tt("category",L), cat_opts, index=_def_idx)
+                
+            col1, col2, col3 = st.columns(3)
+            am = col1.number_input(tt("amount",L), min_value=0.01, step=1.0)
+            cur = col2.selectbox("Currency", ["EUR", "USD", "IRR"], index=0)
+            cat_sel = col3.selectbox(tt("category",L), cat_opts, index=_def_idx)
             sc_db = cat_lookup.get(cat_sel.split(" ", 1)[1], cat_sel.split(" ", 1)[1])
-            if ds0 and _sug in cat_order:
-                st.caption(f"🤖 {tt('ai_cat', L)}: {ct(_sug, L)}")
-                col1, col2, col3 = st.columns(3)
-                am = col1.number_input(tt("amount",L), min_value=0.01, step=1.0)
-                cur = col2.selectbox("Currency", ["EUR", "USD", "IRR"], index=0)
-                sc_db = col3.selectbox(tt("category",L), [c["name"] for c in cats])
-                ds0 = st.text_input(tt("description",L))
-                td = st.date_input(tt("date",L), value=today)
-                if st.form_submit_button(f"✅ {tt('save',L)}", use_container_width=True):
-                    c = get_db(); c.execute("INSERT INTO expenses(company_id,amount,currency,category,description,date,created_by) VALUES(?,?,?,?,?,?,?)",
-                        (form_cid, am, cur, sc_db, ds0, td.strftime("%Y-%m-%d"), user["id"]))
-                    c.commit()
-                    log_activity(form_cid, user["id"], user["username"], "add_expense", f"{am}{cur} {sc_db}")
-                    # ── Budget warning check ──
-                    month_ym = td.strftime("%Y-%m")
-                    b_row = c.execute("SELECT amount as budget FROM budget WHERE company_id=? AND month=? AND category=?", (form_cid, month_ym, sc_db)).fetchone()
-                    if b_row:
-                        used = c.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ? AND category=?", (form_cid, month_ym+"%", sc_db)).fetchone()[0]
-                        pct = used / b_row["budget"] * 100 if b_row["budget"] else 100
-                        if pct >= 100:
-                            st.warning(f"⚠️ {tt('budget_over', L)}: {used:.0f}{cur} / {b_row['budget']:.0f}{cur} ({pct:.0f}%)")
-                    c.close()
-                    st.rerun()
+                
+            td = st.date_input(tt("date",L), value=today)
+            if st.form_submit_button(f"✅ {tt('save',L)}", use_container_width=True):
+                c = get_db(); c.execute("INSERT INTO expenses(company_id,amount,currency,category,description,date,created_by) VALUES(?,?,?,?,?,?,?)",
+                    (form_cid, am, cur, sc_db, ds0, td.strftime("%Y-%m-%d"), user["id"]))
+                c.commit()
+                log_activity(form_cid, user["id"], user["username"], "add_expense", f"{am}{cur} {sc_db}")
+                # ── Budget warning check ──
+                month_ym = td.strftime("%Y-%m")
+                b_row = c.execute("SELECT amount as budget FROM budget WHERE company_id=? AND month=? AND category=?", (form_cid, month_ym, sc_db)).fetchone()
+                if b_row:
+                    used = c.execute("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company_id=? AND date LIKE ? AND category=?", (form_cid, month_ym+"%", sc_db)).fetchone()[0]
+                    pct = used / b_row["budget"] * 100 if b_row["budget"] else 100
+                    if pct >= 100:
+                        st.warning(f"⚠️ {tt('budget_over', L)}: {used:.0f}{cur} / {b_row['budget']:.0f}{cur} ({pct:.0f}%)")
+                c.close()
+                st.rerun()
                 c.close(); st.rerun()
         st.markdown("---")
         st.markdown(f"### 💶 {tt('add_income',L)}")
