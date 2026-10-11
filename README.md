@@ -21,7 +21,7 @@ Manage expenses, income, budgets, invoices (OCR), and users for multiple compani
 | 📜 **Activity log** | Audit trail of who added/edited/deleted what |
 | 💾 **Backup** | One-click + scheduled daily DB backups |
 | 🔗 **REST API** | FastAPI endpoints with per-company API keys |
-| 🧪 **Automated tests** | 24 pytest tests (DB, auth, API) |
+| 🧪 **Automated tests** | 52 pytest tests (DB, auth, API) |
 | 🐳 **Docker** | Dockerfile + docker-compose for easy deploy |
 | 📱 **PWA-ready** | Installable on mobile home screen |
 | 🌐 **3 Languages** | Full UI translation (FA/DE/EN) |
@@ -38,7 +38,7 @@ Manage expenses, income, budgets, invoices (OCR), and users for multiple compani
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/exflow-enterprise.git
+git clone https://github.com/sama-sarkhani1878/exflow-enterprise.git
 cd exflow-enterprise
 
 # 2. Create virtual environment
@@ -149,7 +149,7 @@ exflow-enterprise/
 ├── pdf_report.py     # HTML report generator
 ├── ocr_scanner.py    # Invoice OCR (Tesseract)
 ├── backup.py         # DB backup script
-├── tests/            # pytest suite (24 tests)
+├── tests/            # pytest suite (52 tests)
 ├── Dockerfile        # Container image
 ├── docker-compose.yml# App + API services
 ├── requirements.txt  # Python dependencies
