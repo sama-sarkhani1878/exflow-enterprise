@@ -31,7 +31,11 @@ def init_db():
         slug TEXT NOT NULL UNIQUE, currency TEXT DEFAULT 'EUR',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
 
-    # Branding columns for companies (logo color + optional tagline)
+    # Add currency column to expenses if missing
+    try:
+        c.execute("ALTER TABLE expenses ADD COLUMN currency TEXT DEFAULT 'EUR'")
+    except sqlite3.OperationalError:
+        pass
     try:
         c.execute("ALTER TABLE companies ADD COLUMN brand_color TEXT DEFAULT '#4e8cff'")
     except sqlite3.OperationalError:
@@ -49,7 +53,8 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER REFERENCES companies(id),
-        amount REAL NOT NULL, category TEXT NOT NULL,
+        amount REAL NOT NULL, currency TEXT DEFAULT 'EUR',
+        category TEXT NOT NULL,
         description TEXT DEFAULT '', date TEXT NOT NULL,
         created_by INTEGER REFERENCES users(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
