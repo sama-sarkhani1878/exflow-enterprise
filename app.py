@@ -770,26 +770,28 @@ elif page.startswith("📋"):
                 c.close()
                 st.rerun()
                 c.close(); st.rerun()
-        st.markdown("---")
         st.markdown(f"### 💶 {tt('add_income',L)}")
-        with st.form("inf"):
+        with st.form("ii"):
+            # Company picker for superadmin
             form_cid2 = CID
             if user["role"] == "superadmin":
-                _c2 = get_db()
-                comps2 = _c2.execute("SELECT id, name FROM companies").fetchall()
-                _c2.close()
-                opts2 = [c["name"] for c in comps2]
+                _c = get_db()
+                all_comps2 = _c.execute("SELECT id, name FROM companies").fetchall()
+                _c.close()
+                opts2 = [c["name"] for c in all_comps2]
                 sel2 = st.selectbox(tt("company", L), opts2, key="if_comp")
-                form_cid2 = comps2[opts2.index(sel2)]["id"]
-            st.number_input(tt("amount",L), min_value=0.01, step=100.0, key="ia")
+                form_cid2 = all_comps2[opts2.index(sel2)]["id"]
+                
+            col1, col2 = st.columns(2)
+            ia = col1.number_input(tt("amount",L), min_value=0.01, step=100.0)
+            cur_i = col2.selectbox("Currency", ["EUR", "USD", "IRR"], index=0, key="cur_inc")
             st.text_input(tt("source",L), placeholder=tt("source_ph", L), key="src")
-            st.date_input(tt("date",L), value=today, key="id")
+            id_date = st.date_input(tt("date",L), value=today)
             if st.form_submit_button(f"💾 {tt('save',L)}", use_container_width=True):
-                c = get_db(); c.execute("INSERT INTO income(company_id,amount,source,month,date) VALUES(?,?,?,?,?)",
-                    (form_cid2, st.session_state.ia, st.session_state.src,
-                     st.session_state.id.strftime("%Y-%m"), st.session_state.id.strftime("%Y-%m-%d")))
+                c = get_db(); c.execute("INSERT INTO income(company_id,amount,currency,source,month,date,created_by) VALUES(?,?,?,?,?,?,?)",
+                    (form_cid2, ia, cur_i, st.session_state.src, id_date.strftime("%Y-%m"), id_date.strftime("%Y-%m-%d"), user["id"]))
                 c.commit()
-                log_activity(form_cid2, user["id"], user["username"], "add_income", f"{st.session_state.ia}€ {st.session_state.src}")
+                log_activity(form_cid2, user["id"], user["username"], "add_income", f"{ia}{cur_i} {st.session_state.src}")
                 c.close(); st.rerun()
     with cl:
         st.markdown(f"### 📋 {tt('list',L)}")
@@ -804,12 +806,13 @@ elif page.startswith("📋"):
             for e in shown:
                 ci = cmap.get(e["category"], {"icon": "📌", "color": "#6b7280"})
                 col_e, col_btn = st.columns([5, 1])
-                with col_e:
-                    st.markdown(f"<div style='display:flex;align-items:center;gap:8px;padding:4px 0;'><span>{ci['icon']}</span>"
-                        f"<span style='background:{ci['color']}20;color:{ci['color']};padding:2px 8px;border-radius:12px;font-size:0.7rem;'>{ct(e['category'], L)}</span>"
-                        f"<span style='flex:1;'>{e['description'] or '-'}</span>"
-                        f"<span style='font-weight:700;color:#f87171;'>{e['amount']:,.2f}€</span>"
-                        f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
+                cur_sym = {"EUR": "€", "USD": "$", "IRR": "تومان"}.get(e.get('currency', 'EUR'), '€')
+                st.markdown(f"<div style='display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #222;'>"
+                f"<span>{ci.get('icon','📌')}</span>"
+                f"<span style='background:{ci['color']}20;color:{ci['color']};padding:2px 8px;border-radius:12px;font-size:0.7rem;'>{ct(e['category'], L)}</span>"
+                f"<span style='flex:1;'>{e['description'] or '-'}</span>"
+                f"<span style='font-weight:700;color:#f87171;'>{e['amount']:,.2f} {cur_sym}</span>"
+                f"<span style='font-size:0.78rem;color:#666;'>{e['date']}</span></div>", unsafe_allow_html=True)
                 with col_btn:
                     st.markdown("")
                     b1, b2 = st.columns(2)

@@ -31,9 +31,13 @@ def init_db():
         slug TEXT NOT NULL UNIQUE, currency TEXT DEFAULT 'EUR',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
 
-    # Add currency column to expenses if missing
+    # Add currency column to tables if missing
     try:
         c.execute("ALTER TABLE expenses ADD COLUMN currency TEXT DEFAULT 'EUR'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE income ADD COLUMN currency TEXT DEFAULT 'EUR'")
     except sqlite3.OperationalError:
         pass
     try:
@@ -71,7 +75,8 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS income (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER REFERENCES companies(id),
-        amount REAL NOT NULL, source TEXT NOT NULL,
+        amount REAL NOT NULL, currency TEXT DEFAULT 'EUR',
+        source TEXT NOT NULL,
         month TEXT NOT NULL, date TEXT NOT NULL,
         created_by INTEGER REFERENCES users(id))""")
     c.execute("""CREATE TABLE IF NOT EXISTS api_keys (
